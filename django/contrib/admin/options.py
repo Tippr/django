@@ -480,7 +480,7 @@ class ModelAdmin(BaseModelAdmin):
             yield inline.get_formset(request, obj)
 
     def get_paginator(self, request, queryset, per_page, orphans=0, allow_empty_first_page=True):
-        return self.paginator(queryset, per_page, orphans, allow_empty_first_page)
+        return self.paginator(queryset, per_page, orphans=orphans, allow_empty_first_page=allow_empty_first_page)
 
     def log_addition(self, request, object):
         """

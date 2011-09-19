@@ -124,7 +124,7 @@ class Page(object):
 class UncountedPaginator(object):
     """Pagination for collections that don't support count()/len()"""
 
-    def __init__(self, object_list, per_page):
+    def __init__(self, object_list, per_page, **kwargs):
         self.object_list = object_list
         self.per_page = per_page
 
