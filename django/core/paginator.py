@@ -9,6 +9,7 @@ class PageNotAnInteger(InvalidPage):
 class EmptyPage(InvalidPage):
     pass
 
+    
 class Paginator(object):
     def __init__(self, object_list, per_page, orphans=0, allow_empty_first_page=True):
         self.object_list = object_list
@@ -72,13 +73,13 @@ class Paginator(object):
         """
         return range(1, self.num_pages + 1)
     page_range = property(_get_page_range)
-
+ 
 QuerySetPaginator = Paginator # For backwards-compatibility.
 
 class Page(object):
     def __init__(self, object_list, number, paginator):
         self.object_list = object_list
-        self.number = number
+        self.number = number  # 1-based
         self.paginator = paginator
 
     def __repr__(self):
@@ -117,4 +118,60 @@ class Page(object):
         # Special case for the last page because there can be orphans.
         if self.number == self.paginator.num_pages:
             return self.paginator.count
+        return self.number * self.paginator.per_page
+
+
+class UncountedPaginator(object):
+    """Pagination for collections that don't support count()/len()"""
+
+    def __init__(self, object_list, per_page):
+        self.object_list = object_list
+        self.per_page = per_page
+
+    def validate_number(self, number):
+        "Validates the given 1-based page number."
+        try:
+            number = int(number)
+        except ValueError:
+            raise PageNotAnInteger('That page number is not an integer')
+        if number < 1:
+            raise EmptyPage('That page number is less than 1')
+        return number
+
+    def page(self, number):
+        "Returns a UncountedPage object for the given 1-based page number."
+        number = self.validate_number(number)
+        bottom = (number - 1) * self.per_page
+        top = bottom + self.per_page
+        return UncountedPage(self.object_list[bottom:top], number, self)
+
+
+class UncountedPage(Page):
+    """ Page for collections that don't support count()"""
+    
+    def __repr__(self):
+        return '<Page %s>' % (self.number)
+
+    def has_next(self):
+        try:
+            next = self.paginator.object_list[
+                self.number*self.paginator.per_page]
+        except IndexError:
+            return False
+        
+        return True
+
+    def start_index(self):
+        """
+        Returns the 1-based index of the first object on this page,
+        relative to total objects in the paginator.
+        """
+        # Special case, return zero if no items.
+        return (self.paginator.per_page * (self.number - 1)) + 1
+
+    def end_index(self):
+        """
+        Returns the 1-based index of the last object on this page,
+        relative to total objects found (hits).
+        """
         return self.number * self.paginator.per_page

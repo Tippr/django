@@ -1151,13 +1151,9 @@ class ModelAdmin(BaseModelAdmin):
         else:
             action_form = None
 
-        selection_note_all = ungettext('%(total_count)s selected',
-            'All %(total_count)s selected', cl.result_count)
-
         context = {
             'module_name': force_unicode(opts.verbose_name_plural),
             'selection_note': _('0 of %(cnt)s selected') % {'cnt': len(cl.result_list)},
-            'selection_note_all': selection_note_all % {'total_count': cl.result_count},
             'title': cl.title,
             'is_popup': cl.is_popup,
             'cl': cl,
@@ -1170,6 +1166,12 @@ class ModelAdmin(BaseModelAdmin):
             'actions_on_bottom': self.actions_on_bottom,
             'actions_selection_counter': self.actions_selection_counter,
         }
+
+        if hasattr(cl, 'result_count'):
+            selection_note_all = ungettext('%(total_count)s selected',
+                'All %(total_count)s selected', cl.result_count)
+            context['selection_note_all'] = selection_note_all % {'total_count': cl.result_count}
+
         context.update(extra_context or {})
         context_instance = template.RequestContext(request, current_app=self.admin_site.name)
         return render_to_response(self.change_list_template or [

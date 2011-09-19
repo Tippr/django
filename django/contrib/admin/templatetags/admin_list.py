@@ -18,6 +18,7 @@ from django.template import Library
 register = Library()
 
 DOT = '.'
+NEXT = 'N'
 
 def paginator_number(cl,i):
     """
@@ -25,16 +26,25 @@ def paginator_number(cl,i):
     """
     if i == DOT:
         return u'... '
+    elif i == NEXT:
+        return mark_safe(u'<a href="%s"> Next</a> ' % (escape(cl.get_query_string({PAGE_VAR: cl.page_num+1}))))
     elif i == cl.page_num:
         return mark_safe(u'<span class="this-page">%d</span> ' % (i+1))
     else:
-        return mark_safe(u'<a href="%s"%s>%d</a> ' % (escape(cl.get_query_string({PAGE_VAR: i})), (i == cl.paginator.num_pages-1 and ' class="end"' or ''), i+1))
+        if hasattr(cl.paginator, 'num_pages'):
+            return mark_safe(u'<a href="%s"%s>%d</a> ' % (escape(cl.get_query_string({PAGE_VAR: i})), (i == cl.paginator.num_pages-1 and ' class="end"' or ''), i+1))
+        else:
+            return mark_safe(u'<a href="%s">%d</a> ' % (escape(cl.get_query_string({PAGE_VAR: i})), i+1))
+            
 paginator_number = register.simple_tag(paginator_number)
 
 def pagination(cl):
     """
     Generates the series of links to the pages in a paginated list.
+
+    If the paginator doesn't support count() then provide next links
     """
+    # page_num is 0 based here
     paginator, page_num = cl.paginator, cl.page_num
 
     pagination_required = (not cl.show_all or not cl.can_show_all) and cl.multi_page
@@ -43,28 +53,41 @@ def pagination(cl):
     else:
         ON_EACH_SIDE = 3
         ON_ENDS = 2
-
-        # If there are 10 or fewer pages, display links to every page.
-        # Otherwise, do some fancy
-        if paginator.num_pages <= 10:
-            page_range = range(paginator.num_pages)
+        if hasattr(paginator, 'num_pages'):
+            # If there are 10 or fewer pages, display links to every page.
+            # Otherwise, do some fancy
+            if paginator.num_pages <= 10:
+                page_range = range(paginator.num_pages)
+            else:
+                # Insert "smart" pagination links, so that there are always ON_ENDS
+                # links at either end of the list of pages, and there are always
+                # ON_EACH_SIDE links at either end of the "current page" link.
+                page_range = []
+                if page_num > (ON_EACH_SIDE + ON_ENDS):
+                    page_range.extend(range(0, ON_EACH_SIDE - 1))
+                    page_range.append(DOT)
+                    page_range.extend(range(page_num - ON_EACH_SIDE, page_num + 1))
+                else:
+                    page_range.extend(range(0, page_num + 1))
+                if page_num < (paginator.num_pages - ON_EACH_SIDE - ON_ENDS - 1):
+                    page_range.extend(range(page_num + 1, page_num + ON_EACH_SIDE + 1))
+                    page_range.append(DOT)
+                    page_range.extend(range(paginator.num_pages - ON_ENDS, paginator.num_pages))
+                else:
+                    page_range.extend(range(page_num + 1, paginator.num_pages))
         else:
-            # Insert "smart" pagination links, so that there are always ON_ENDS
-            # links at either end of the list of pages, and there are always
-            # ON_EACH_SIDE links at either end of the "current page" link.
+            # This paginator doesn't support counts, so provide next link
             page_range = []
             if page_num > (ON_EACH_SIDE + ON_ENDS):
-                page_range.extend(range(0, ON_EACH_SIDE - 1))
+                page_range.extend(range(0, ON_ENDS))
                 page_range.append(DOT)
-                page_range.extend(range(page_num - ON_EACH_SIDE, page_num + 1))
+                page_range.extend(range(page_num - ON_EACH_SIDE, page_num+1))
             else:
-                page_range.extend(range(0, page_num + 1))
-            if page_num < (paginator.num_pages - ON_EACH_SIDE - ON_ENDS - 1):
-                page_range.extend(range(page_num + 1, page_num + ON_EACH_SIDE + 1))
-                page_range.append(DOT)
-                page_range.extend(range(paginator.num_pages - ON_ENDS, paginator.num_pages))
-            else:
-                page_range.extend(range(page_num + 1, paginator.num_pages))
+                page_range.extend(range(0, page_num+1))
+            # Check if we can get the next page, and put the next link in if so
+            page = paginator.page(page_num+1)
+            if page.has_next():
+                page_range.extend(NEXT)
 
     need_show_all_link = cl.can_show_all and not cl.show_all and cl.multi_page
     return {
@@ -309,11 +332,18 @@ def search_form(cl):
     """
     Displays a search form for searching the list.
     """
-    return {
-        'cl': cl,
-        'show_result_count': cl.result_count != cl.full_result_count,
-        'search_var': SEARCH_VAR
-    }
+    if hasattr(cl, 'result_count'):
+        return {
+            'cl': cl,
+            'show_result_count': cl.result_count != cl.full_result_count,
+            'search_var': SEARCH_VAR
+        }
+    else:
+        return {
+            'cl': cl,
+            'search_var': SEARCH_VAR
+        }
+        
 search_form = register.inclusion_tag('admin/search_form.html')(search_form)
 
 def admin_list_filter(cl, spec):
